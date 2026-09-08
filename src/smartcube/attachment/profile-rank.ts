@@ -1,7 +1,9 @@
 import type { SmartCubeProtocol } from '../protocol';
 
 /**
- * Pick the protocol that best matches the GATT profile. Tie-break with `matchesDevice` (name).
+ * Pick the protocol that best matches the GATT profile. A recognised device name
+ * takes precedence over a higher-scoring but name-incompatible profile: some
+ * vendors share a primary service UUID (notably GoCube and GAN Gen2).
  */
 export function resolveProtocolByGatt(
     protocols: readonly SmartCubeProtocol[],
@@ -15,9 +17,16 @@ export function resolveProtocolByGatt(
     const maxScore = ranked.reduce((m, r) => Math.max(m, r.score), -1);
 
     if (maxScore > 0) {
+        const named = ranked
+            .filter((r) => r.score > 0)
+            .filter((r) => r.p.matchesDevice(device));
+        if (named.length > 0) {
+            return named.reduce((best, candidate) =>
+                candidate.score > best.score ? candidate : best
+            ).p;
+        }
         const top = ranked.filter((r) => r.score === maxScore);
-        const preferred = top.find((r) => r.p.matchesDevice(device));
-        return (preferred ?? top[0]).p;
+        return top[0].p;
     }
 
     for (const p of protocols) {
