@@ -147,11 +147,20 @@ export async function connectSmartCube(
 
     const device = await navigator.bluetooth.requestDevice(requestOptions);
 
-    opts.onStatus?.('Reading advertisements…');
-    const advertisementManufacturerData = await waitForManufacturerData(
-        device,
-        opts.enableAddressSearch ? 8000 : 2500
-    );
+    // Only encrypted protocols need advertisements to recover a MAC address.
+    // Waiting for them on GoCube delays connection by the full timeout.
+    const namedProtocol = protocols.find((protocol) => protocol.matchesDevice(device));
+    const collectAdvertisementData = namedProtocol
+        ? namedProtocol.requiresAdvertisementData === true
+        : true;
+    let advertisementManufacturerData: BluetoothManufacturerData | null = null;
+    if (collectAdvertisementData) {
+        opts.onStatus?.('Reading advertisements…');
+        advertisementManufacturerData = await waitForManufacturerData(
+            device,
+            opts.enableAddressSearch ? 8000 : 2500
+        );
+    }
 
     opts.onStatus?.('Connecting…');
     const serviceUuids = await collectPrimaryServiceUuids(device);
@@ -165,6 +174,15 @@ export async function connectSmartCube(
             /* ignore */
         }
         throw new Error("Selected device doesn't match any registered smartcube protocol");
+    }
+
+    // An unrecognised name can still resolve to a MAC-dependent protocol by GATT profile.
+    if (!collectAdvertisementData && protocol.requiresAdvertisementData) {
+        opts.onStatus?.('Reading advertisements…');
+        advertisementManufacturerData = await waitForManufacturerData(
+            device,
+            opts.enableAddressSearch ? 8000 : 2500
+        );
     }
 
     const context = {

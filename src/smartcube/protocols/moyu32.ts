@@ -499,6 +499,7 @@ async function connectMoyu32Device(
 const moyu32Protocol: SmartCubeProtocol = {
     nameFilters: [{ namePrefix: '^S' }, { namePrefix: 'WCU_' }, { namePrefix: 'WCU_MY3' }],
     optionalServices: [SERVICE_UUID],
+    requiresAdvertisementData: true,
 
     matchesDevice(device: BluetoothDevice): boolean {
         const name = device.name || '';

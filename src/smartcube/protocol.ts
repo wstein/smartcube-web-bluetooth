@@ -11,6 +11,8 @@ interface SmartCubeProtocol {
     nameFilters: SmartCubeNameFilter[];
     optionalServices: string[];
     optionalManufacturerData?: number[];
+    /** Whether manufacturer advertisements are needed before connecting (for MAC resolution). */
+    requiresAdvertisementData?: boolean;
     matchesDevice(device: BluetoothDevice): boolean;
     /**
      * Higher scores win when choosing a driver from primary service UUIDs.

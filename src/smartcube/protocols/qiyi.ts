@@ -471,6 +471,7 @@ const qiyiProtocol: SmartCubeProtocol = {
         { namePrefix: "XMD-TornadoV4-i" }
     ],
     optionalServices: [SERVICE_UUID],
+    requiresAdvertisementData: true,
     optionalManufacturerData: QIYI_CIC_LIST,
 
     matchesDevice(device: BluetoothDevice): boolean {

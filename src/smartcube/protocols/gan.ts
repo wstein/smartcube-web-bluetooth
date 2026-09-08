@@ -298,6 +298,7 @@ const ganProtocol: SmartCubeProtocol = {
         def.GAN_GEN4_SERVICE,
     ],
     optionalManufacturerData: def.GAN_CIC_LIST,
+    requiresAdvertisementData: true,
 
     matchesDevice(device: BluetoothDevice): boolean {
         const name = device.name || '';
