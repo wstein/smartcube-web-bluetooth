@@ -13,6 +13,7 @@ export type {
     SmartCubeEventMessage,
     SmartCubeMoveEvent,
     SmartCubeFaceletsEvent,
+    SmartCubeCubieState,
     SmartCubeGyroEvent,
     SmartCubeBatteryEvent,
     SmartCubeProtocolInfo,

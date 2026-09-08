@@ -3,6 +3,8 @@ import { Observable } from 'rxjs';
 
 type SmartCubeMoveEvent = {
     type: "MOVE";
+    /** Protocol-provided rolling move/state counter, when available. */
+    serial?: number;
     face: number;
     direction: number;
     move: string;
@@ -10,9 +12,25 @@ type SmartCubeMoveEvent = {
     cubeTimestamp: number | null;
 };
 
+/** Cubie permutation and orientation state supplied by some cube protocols. */
+type SmartCubeCubieState = {
+    /** Corner permutation: 8 values from 0 to 7. */
+    CP: number[];
+    /** Corner orientation: 8 values from 0 to 2. */
+    CO: number[];
+    /** Edge permutation: 12 values from 0 to 11. */
+    EP: number[];
+    /** Edge orientation: 12 values from 0 to 1. */
+    EO: number[];
+};
+
 type SmartCubeFaceletsEvent = {
     type: "FACELETS";
+    /** Protocol-provided rolling move/state counter, when available. */
+    serial?: number;
     facelets: string;
+    /** Cubie permutation and orientation state, when available. */
+    state?: SmartCubeCubieState;
 };
 
 type SmartCubeGyroEvent = {
@@ -85,6 +103,7 @@ export type {
     SmartCubeEventMessage,
     SmartCubeMoveEvent,
     SmartCubeFaceletsEvent,
+    SmartCubeCubieState,
     SmartCubeGyroEvent,
     SmartCubeBatteryEvent,
     SmartCubeProtocolInfo,
