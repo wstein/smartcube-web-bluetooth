@@ -55,6 +55,28 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
 
 describe('connectSmartCube (capture replay)', () => {
   it(
+    'does not wait for advertisements before connecting a GoCube',
+    async () => {
+      const fixture = await loadFixture(FIXTURES.gocube);
+      const { device } = installMockBluetoothFromFixture(fixture, {
+        deviceId: 'gocube-fast-connect',
+        maxAutoFlushNotifies: 5,
+      });
+      device.watchAdvertisements = async () => await new Promise<void>(() => {});
+
+      const conn = await withTimeout(
+        connectSmartCube({ enableAddressSearch: false }),
+        1000,
+        'connectSmartCube(GoCube)'
+      );
+
+      expect(conn.protocol.id).toBe('gocube');
+      await conn.disconnect();
+    },
+    5_000
+  );
+
+  it(
     'matches fixture decoded events when replaying a Giiker fixture through connectSmartCube',
     async () => {
       const fixture = await loadFixture(FIXTURES.giiker);
@@ -206,4 +228,3 @@ describe('protocol.connect (capture replay)', () => {
     await conn.disconnect();
   }, 20_000);
 });
-
