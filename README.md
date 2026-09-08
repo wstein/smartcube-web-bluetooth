@@ -93,6 +93,34 @@ which contains cubie permutation and orientation arrays (`CP`, `CO`, `EP`, and `
 These fields are not available on every cube or protocol. Portable applications should use
 `facelets` as the canonical cube-state representation and treat `serial` and `state` as optional.
 
+GoCube move events can include `goCubeCenterOrientation`, the center-orientation byte from the
+GoCube rotation frame. GoCube `HARDWARE` events can include `goCubeType` and
+`goCubeOfflineStats` (cumulative moves, seconds, and solves). Request hardware information to
+ask a GoCube for its type and offline statistics:
+
+```typescript
+await conn.sendCommand({ type: "REQUEST_HARDWARE" });
+```
+
+#### GoCube vendor controls
+
+GoCube devices advertise optional controls through `conn.capabilities.vendorCommands`. Check that
+the desired command is listed before calling `sendVendorCommand`; other cube protocols do not
+provide this method.
+
+```typescript
+if (conn.capabilities.vendorCommands?.includes("CALIBRATE_ORIENTATION") && conn.sendVendorCommand) {
+    await conn.sendVendorCommand({
+        vendor: "gocube",
+        type: "CALIBRATE_ORIENTATION",
+    });
+}
+```
+
+Available GoCube vendor commands are `REBOOT`, `SET_ORIENTATION_ENABLED`,
+`CALIBRATE_ORIENTATION`, `FLASH_BACKLIGHT`, `SLOW_FLASH_BACKLIGHT`,
+`TOGGLE_ANIMATED_BACKLIGHT`, and `TOGGLE_BACKLIGHT`.
+
 ### GAN-specific Smart Cube API (legacy)
 
 The original GAN-only APIs are still available for existing applications and continue to work on top of the new implementation:
