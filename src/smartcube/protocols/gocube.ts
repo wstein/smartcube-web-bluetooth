@@ -141,18 +141,34 @@ class GoCubeConnection implements SmartCubeConnection {
         this.device = device;
         this.deviceName = name;
         this.deviceMAC = '';
+        let vendorCommands: SmartCubeCapabilities['vendorCommands'];
+        if (supportsVendorCommands) {
+            vendorCommands = [
+                'REBOOT',
+                'FLASH_BACKLIGHT',
+                'SLOW_FLASH_BACKLIGHT',
+                'TOGGLE_ANIMATED_BACKLIGHT',
+                'TOGGLE_BACKLIGHT',
+            ];
+            if (gyroSupported) {
+                vendorCommands = [
+                    'REBOOT',
+                    'SET_ORIENTATION_ENABLED',
+                    'CALIBRATE_ORIENTATION',
+                    'FLASH_BACKLIGHT',
+                    'SLOW_FLASH_BACKLIGHT',
+                    'TOGGLE_ANIMATED_BACKLIGHT',
+                    'TOGGLE_BACKLIGHT',
+                ];
+            }
+        }
         this.capabilities = {
             gyroscope: gyroSupported,
             battery: true,
             facelets: true,
             hardware: true,
             reset: true,
-            ...(supportsVendorCommands ? {
-                vendorCommands: [
-                    'REBOOT', 'SET_ORIENTATION_ENABLED', 'CALIBRATE_ORIENTATION', 'FLASH_BACKLIGHT',
-                    'SLOW_FLASH_BACKLIGHT', 'TOGGLE_ANIMATED_BACKLIGHT', 'TOGGLE_BACKLIGHT',
-                ] as const,
-            } : {}),
+            ...(vendorCommands ? { vendorCommands } : {}),
         };
         this.events$ = new Subject<SmartCubeEvent>();
     }
