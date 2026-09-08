@@ -5,6 +5,8 @@ type SmartCubeMoveEvent = {
     type: "MOVE";
     /** Protocol-provided rolling move/state counter, when available. */
     serial?: number;
+    /** GoCube center-piece orientation byte, when supplied by its rotation frame. */
+    goCubeCenterOrientation?: number;
     face: number;
     direction: number;
     move: string;
@@ -33,6 +35,28 @@ type SmartCubeFaceletsEvent = {
     state?: SmartCubeCubieState;
 };
 
+type GoCubeType = {
+    code: number;
+    name: string;
+};
+
+type GoCubeOfflineStats = {
+    moves: number;
+    timeSeconds: number;
+    solves: number;
+};
+
+type GoCubeVendorCommand =
+    | { vendor: 'gocube'; type: 'REBOOT' }
+    | { vendor: 'gocube'; type: 'SET_ORIENTATION_ENABLED'; enabled: boolean }
+    | { vendor: 'gocube'; type: 'CALIBRATE_ORIENTATION' }
+    | { vendor: 'gocube'; type: 'FLASH_BACKLIGHT' }
+    | { vendor: 'gocube'; type: 'SLOW_FLASH_BACKLIGHT' }
+    | { vendor: 'gocube'; type: 'TOGGLE_ANIMATED_BACKLIGHT' }
+    | { vendor: 'gocube'; type: 'TOGGLE_BACKLIGHT' };
+
+type SmartCubeVendorCommand = GoCubeVendorCommand;
+
 type SmartCubeGyroEvent = {
     type: "GYRO";
     quaternion: { x: number; y: number; z: number; w: number };
@@ -56,6 +80,10 @@ type SmartCubeHardwareEvent = {
     hardwareVersion?: string;
     productDate?: string;
     gyroSupported?: boolean;
+    /** GoCube model type returned by its vendor protocol. */
+    goCubeType?: GoCubeType;
+    /** GoCube Edge cumulative offline statistics returned by its vendor protocol. */
+    goCubeOfflineStats?: GoCubeOfflineStats;
 };
 
 type SmartCubeDisconnectEvent = {
@@ -84,6 +112,8 @@ interface SmartCubeCapabilities {
     facelets: boolean;
     hardware: boolean;
     reset: boolean;
+    /** Protocol-specific commands available through `sendVendorCommand`. */
+    vendorCommands?: readonly SmartCubeVendorCommand['type'][];
 }
 
 interface SmartCubeConnection {
@@ -93,6 +123,8 @@ interface SmartCubeConnection {
     readonly capabilities: SmartCubeCapabilities;
     events$: Observable<SmartCubeEvent>;
     sendCommand(command: SmartCubeCommand): Promise<void>;
+    /** Send an optional protocol-specific command after checking `capabilities.vendorCommands`. */
+    sendVendorCommand?(command: SmartCubeVendorCommand): Promise<void>;
     disconnect(): Promise<void>;
 }
 
@@ -104,6 +136,10 @@ export type {
     SmartCubeMoveEvent,
     SmartCubeFaceletsEvent,
     SmartCubeCubieState,
+    GoCubeType,
+    GoCubeOfflineStats,
+    GoCubeVendorCommand,
+    SmartCubeVendorCommand,
     SmartCubeGyroEvent,
     SmartCubeBatteryEvent,
     SmartCubeProtocolInfo,

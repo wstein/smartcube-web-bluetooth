@@ -1,6 +1,6 @@
 
 import { Subject } from 'rxjs';
-import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
+import { GoCubeOfflineStats, GoCubeType, GoCubeVendorCommand, SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
 import { SmartCubeProtocol, registerProtocol } from '../protocol';
@@ -18,6 +18,15 @@ const WRITE_STATE = 51;
 const WRITE_RESET = 53;
 /** Enable MsgOrientation (3D tracking). Rubik's Connected / GoCube X omit IMU; only classic GoCube uses this. */
 const WRITE_ENABLE_ORIENTATION = 0x38;
+const WRITE_REBOOT = 0x34;
+const WRITE_DISABLE_ORIENTATION = 0x37;
+const WRITE_REQUEST_OFFLINE_STATS = 0x39;
+const WRITE_FLASH_BACKLIGHT = 0x41;
+const WRITE_TOGGLE_ANIMATED_BACKLIGHT = 0x42;
+const WRITE_SLOW_FLASH_BACKLIGHT = 0x43;
+const WRITE_TOGGLE_BACKLIGHT = 0x44;
+const WRITE_REQUEST_CUBE_TYPE = 0x56;
+const WRITE_CALIBRATE_ORIENTATION = 0x57;
 
 const INITIAL_STATE_TIMEOUT_MS = 5000;
 
@@ -73,6 +82,30 @@ export function parseGoCubeOrientationPayload(payloadUtf8: string): { x: number;
     return { x: nx, y: -nz, z: -ny, w: nw };
 }
 
+export function decodeGoCubeCubeTypePayload(payload: Uint8Array): GoCubeType | null {
+    if (payload.length < 1) return null;
+    const code = payload[0]!;
+    return { code, name: code === 1 ? 'edge' : 'standard' };
+}
+
+export function decodeGoCubeOfflineStatsPayload(payloadUtf8: string): GoCubeOfflineStats | null {
+    const values = payloadUtf8.split('#').map((part) => Number.parseInt(part, 10));
+    if (values.length !== 3 || values.some((value) => !Number.isFinite(value))) return null;
+    return { moves: values[0]!, timeSeconds: values[1]!, solves: values[2]! };
+}
+
+export function goCubeVendorCommandOpcode(command: GoCubeVendorCommand): number {
+    switch (command.type) {
+        case 'REBOOT': return WRITE_REBOOT;
+        case 'SET_ORIENTATION_ENABLED': return command.enabled ? WRITE_ENABLE_ORIENTATION : WRITE_DISABLE_ORIENTATION;
+        case 'CALIBRATE_ORIENTATION': return WRITE_CALIBRATE_ORIENTATION;
+        case 'FLASH_BACKLIGHT': return WRITE_FLASH_BACKLIGHT;
+        case 'SLOW_FLASH_BACKLIGHT': return WRITE_SLOW_FLASH_BACKLIGHT;
+        case 'TOGGLE_ANIMATED_BACKLIGHT': return WRITE_TOGGLE_ANIMATED_BACKLIGHT;
+        case 'TOGGLE_BACKLIGHT': return WRITE_TOGGLE_BACKLIGHT;
+    }
+}
+
 const AXIS_PERM = [5, 2, 0, 3, 1, 4];
 const FACE_PERM = [0, 1, 2, 5, 8, 7, 6, 3];
 const FACE_OFFSET = [0, 0, 6, 2, 0, 0];
@@ -104,7 +137,7 @@ class GoCubeConnection implements SmartCubeConnection {
     private awaitingInitialState = false;
     private resolveInitialState: (() => void) | undefined;
 
-    constructor(device: BluetoothDevice, name: string, gyroSupported: boolean) {
+    constructor(device: BluetoothDevice, name: string, gyroSupported: boolean, supportsVendorCommands: boolean) {
         this.device = device;
         this.deviceName = name;
         this.deviceMAC = '';
@@ -113,7 +146,13 @@ class GoCubeConnection implements SmartCubeConnection {
             battery: true,
             facelets: true,
             hardware: true,
-            reset: true
+            reset: true,
+            ...(supportsVendorCommands ? {
+                vendorCommands: [
+                    'REBOOT', 'SET_ORIENTATION_ENABLED', 'CALIBRATE_ORIENTATION', 'FLASH_BACKLIGHT',
+                    'SLOW_FLASH_BACKLIGHT', 'TOGGLE_ANIMATED_BACKLIGHT', 'TOGGLE_BACKLIGHT',
+                ] as const,
+            } : {}),
         };
         this.events$ = new Subject<SmartCubeEvent>();
     }
@@ -124,7 +163,16 @@ class GoCubeConnection implements SmartCubeConnection {
         this.parseData(value);
     };
 
-    private applySingleMove(timestamp: number, axis: number, dirBit: number): void {
+    private cubieState(cube: CubieCube = this.prevCubie) {
+        return {
+            CP: cube.ca.map((corner) => corner & 7),
+            CO: cube.ca.map((corner) => corner >> 3),
+            EP: cube.ea.map((edge) => edge >> 1),
+            EO: cube.ea.map((edge) => edge & 1),
+        };
+    }
+
+    private applySingleMove(timestamp: number, axis: number, dirBit: number, centerOrientation?: number): void {
         const power = [0, 2][dirBit];
         const m = axis * 3 + power;
         const moveStr = ("URFDLB".charAt(axis) + " 2'".charAt(power)).trim();
@@ -135,6 +183,7 @@ class GoCubeConnection implements SmartCubeConnection {
         this.events$.next({
             timestamp,
             type: "MOVE",
+            goCubeCenterOrientation: centerOrientation,
             face: axis,
             direction: power === 0 ? 0 : 1,
             move: moveStr,
@@ -145,7 +194,8 @@ class GoCubeConnection implements SmartCubeConnection {
         this.events$.next({
             timestamp,
             type: "FACELETS",
-            facelets: facelet
+            facelets: facelet,
+            state: this.cubieState(this.curCubie)
         });
 
         const tmp = this.curCubie;
@@ -236,7 +286,7 @@ class GoCubeConnection implements SmartCubeConnection {
                 const axis = AXIS_PERM[value.getUint8(3 + i) >> 1];
                 const dirBit = value.getUint8(3 + i) & 1;
                 this.lastMoveMeta = { axis, dirBit };
-                this.applySingleMove(timestamp, axis, dirBit);
+                this.applySingleMove(timestamp, axis, dirBit, value.getUint8(4 + i));
             }
         } else if (msgType === 2) { // Cube state
             // Full-cube state is six 9-sticker faces in wire order; unpack with AXIS_PERM/FACE_PERM.
@@ -267,10 +317,19 @@ class GoCubeConnection implements SmartCubeConnection {
             this.events$.next({
                 timestamp,
                 type: "FACELETS",
-                facelets: this.prevCubie.toFaceCube()
+                facelets: this.prevCubie.toFaceCube(),
+                state: this.cubieState()
             });
         } else if (msgType === 5) { // Battery
             this.emitBatteryLevel(value.getUint8(3), timestamp);
+        } else if (msgType === 7) { // Offline statistics
+            const payload = new Uint8Array(value.buffer, value.byteOffset + 3, msgLen);
+            const stats = decodeGoCubeOfflineStatsPayload(new TextDecoder().decode(payload));
+            if (stats) this.events$.next({ timestamp, type: 'HARDWARE', goCubeOfflineStats: stats });
+        } else if (msgType === 8) { // Cube type
+            const payload = new Uint8Array(value.buffer, value.byteOffset + 3, msgLen);
+            const cubeType = decodeGoCubeCubeTypePayload(payload);
+            if (cubeType) this.events$.next({ timestamp, type: 'HARDWARE', goCubeType: cubeType });
         }
     }
 
@@ -328,7 +387,8 @@ class GoCubeConnection implements SmartCubeConnection {
             this.events$.next({
                 timestamp: now(),
                 type: "FACELETS",
-                facelets: this.prevCubie.toFaceCube()
+                facelets: this.prevCubie.toFaceCube(),
+                state: this.cubieState()
             });
         });
     }
@@ -345,11 +405,14 @@ class GoCubeConnection implements SmartCubeConnection {
             this.events$.next({
                 timestamp: ts,
                 type: "FACELETS",
-                facelets: this.prevCubie.toFaceCube()
+                facelets: this.prevCubie.toFaceCube(),
+                state: this.cubieState()
             });
             await writeGattCharacteristicValue(this.writeChrct, new Uint8Array([WRITE_STATE]).buffer);
         } else if (command.type === "REQUEST_HARDWARE") {
             this.emitHardwareEvent();
+            await writeGattCharacteristicValue(this.writeChrct, new Uint8Array([WRITE_REQUEST_CUBE_TYPE]).buffer);
+            await writeGattCharacteristicValue(this.writeChrct, new Uint8Array([WRITE_REQUEST_OFFLINE_STATS]).buffer);
         } else if (command.type === "REQUEST_RESET") {
             await writeGattCharacteristicValue(this.writeChrct, new Uint8Array([WRITE_RESET]).buffer);
             this.curCubie = new CubieCube();
@@ -361,9 +424,17 @@ class GoCubeConnection implements SmartCubeConnection {
             this.events$.next({
                 timestamp: now(),
                 type: "FACELETS",
-                facelets: SOLVED_FACELET
+                facelets: SOLVED_FACELET,
+                state: this.cubieState()
             });
         }
+    }
+
+    async sendVendorCommand(command: GoCubeVendorCommand): Promise<void> {
+        if (!this.writeChrct || !this.capabilities.vendorCommands?.includes(command.type)) {
+            throw new Error(`Unsupported GoCube vendor command: ${command.type}`);
+        }
+        await writeGattCharacteristicValue(this.writeChrct, new Uint8Array([goCubeVendorCommandOpcode(command)]).buffer);
     }
 
     async disconnect(): Promise<void> {
@@ -412,7 +483,7 @@ const goCubeProtocol: SmartCubeProtocol = {
     ): Promise<SmartCubeConnection> {
         const raw = device.name ?? '';
         const name = raw.startsWith('GoCube') ? 'GoCube' : 'Rubiks Connected';
-        const conn = new GoCubeConnection(device, name, goCubeDeviceSupportsGyro(raw));
+        const conn = new GoCubeConnection(device, name, goCubeDeviceSupportsGyro(raw), raw.startsWith('GoCube'));
         await conn.init();
         return conn;
     }
