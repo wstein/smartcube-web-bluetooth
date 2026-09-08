@@ -84,6 +84,15 @@ if (conn.capabilities.battery) {
 }
 ```
 
+#### Optional protocol metadata
+
+`MOVE` and `FACELETS` events can include optional protocol-provided metadata. For GAN cubes,
+`serial` is the rolling move/state counter. GAN `FACELETS` events can also include `state`,
+which contains cubie permutation and orientation arrays (`CP`, `CO`, `EP`, and `EO`).
+
+These fields are not available on every cube or protocol. Portable applications should use
+`facelets` as the canonical cube-state representation and treat `serial` and `state` as optional.
+
 ### GAN-specific Smart Cube API (legacy)
 
 The original GAN-only APIs are still available for existing applications and continue to work on top of the new implementation:
