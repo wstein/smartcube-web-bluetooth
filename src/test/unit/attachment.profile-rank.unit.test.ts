@@ -30,6 +30,13 @@ describe('resolveProtocolByGatt', () => {
     expect(out).toBe(p1);
   });
 
+  it('prefers a matching device name over a higher-scoring incompatible GATT profile', () => {
+    const gan = proto('gan', { score: 120, matches: false });
+    const goCube = proto('gocube', { score: 110, matches: true });
+    const out = resolveProtocolByGatt([gan, goCube], new Set<string>(), {} as BluetoothDevice);
+    expect(out).toBe(goCube);
+  });
+
   it('falls back to matchesDevice when all scores are <= 0', () => {
     const p1 = proto('p1', { score: 0, matches: false });
     const p2 = proto('p2', { score: 0, matches: true });
@@ -44,4 +51,3 @@ describe('resolveProtocolByGatt', () => {
     expect(out).toBeNull();
   });
 });
-
