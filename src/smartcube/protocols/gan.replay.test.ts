@@ -83,6 +83,24 @@ describe('ganProtocol.connect (capture replay)', () => {
     expect(lastFacelets(events)).toBe(expectedLast);
     expect(conn.capabilities.gyroscope).toBe(false);
 
+    const moveEvent = events.find((event) => event.type === 'MOVE');
+    expect(moveEvent).toMatchObject({
+      type: 'MOVE',
+      serial: expect.any(Number),
+    });
+
+    const faceletsEvent = events.find((event) => event.type === 'FACELETS');
+    expect(faceletsEvent).toMatchObject({
+      type: 'FACELETS',
+      serial: expect.any(Number),
+      state: {
+        CP: expect.any(Array),
+        CO: expect.any(Array),
+        EP: expect.any(Array),
+        EO: expect.any(Array),
+      },
+    });
+
     await conn.disconnect();
   }, 20_000);
 
@@ -124,4 +142,3 @@ describe('ganProtocol.connect (capture replay)', () => {
     await conn.disconnect();
   }, 20_000);
 });
-
