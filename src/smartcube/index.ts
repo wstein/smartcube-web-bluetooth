@@ -28,7 +28,7 @@ export type {
     SmartCubeConnection
 } from './types';
 
-export { connectSmartCube } from './connect';
+export { browserMacAddressProvider, connectSmartCube } from './connect';
 export { getCachedMacForDevice, removeCachedMacForDevice } from './attachment/address-hints';
 
 export type {

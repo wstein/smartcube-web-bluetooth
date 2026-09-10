@@ -129,10 +129,31 @@ function normalizeOptions(
     return arg;
 }
 
+/**
+ * Browser fallback for encrypted cubes whose advertisements cannot reveal a
+ * MAC address. Keeping this in the transport library gives every host the
+ * same recovery path instead of requiring app-specific GAN UI.
+ */
+export const browserMacAddressProvider = async (
+    device: BluetoothDevice,
+    isFallbackCall?: boolean
+): Promise<string | null> => {
+    if (!isFallbackCall || typeof window === 'undefined') return null;
+    const value = window.prompt(
+        `${device.name ?? 'This encrypted cube'} did not expose its Bluetooth MAC address. ` +
+        'Enter it as aa:bb:cc:dd:ee:ff, or Cancel. Automatic recovery may require enabling Web Bluetooth advertisement watching in your browser.'
+    );
+    return value?.trim() || null;
+};
+
 export async function connectSmartCube(
     arg?: MacAddressProvider | ConnectSmartCubeOptions
 ): Promise<SmartCubeConnection> {
-    const opts = normalizeOptions(arg);
+    const supplied = normalizeOptions(arg);
+    const opts: ConnectSmartCubeOptions = {
+        ...supplied,
+        macAddressProvider: supplied.macAddressProvider ?? browserMacAddressProvider
+    };
     const protocols = getRegisteredProtocols();
 
     if (protocols.length === 0) {

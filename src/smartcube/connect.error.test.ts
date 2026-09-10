@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Subject } from 'rxjs';
-import { connectSmartCube } from './connect';
+import { browserMacAddressProvider, connectSmartCube } from './connect';
 import { registerProtocol, getRegisteredProtocols, type SmartCubeProtocol } from './protocol';
 import type { SmartCubeCapabilities, SmartCubeCommand, SmartCubeConnection, SmartCubeEvent } from './types';
 import { FIXTURES, loadFixture } from '../test/fixtures';
@@ -21,6 +21,10 @@ function restoreProtocolRegistry(protocols: SmartCubeProtocol[]): void {
 }
 
 describe('connectSmartCube (error paths)', () => {
+  it('keeps the library MAC fallback dormant until a protocol exhausts automatic recovery', async () => {
+    await expect(browserMacAddressProvider({ name: 'GAN test' } as BluetoothDevice, false)).resolves.toBeNull();
+  });
+
   it('throws when no smartcube protocols are registered', async () => {
     const prev = clearProtocolRegistry();
     try {
@@ -149,4 +153,3 @@ describe('connectSmartCube (error paths)', () => {
     }
   });
 });
-
