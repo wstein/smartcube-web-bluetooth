@@ -219,7 +219,6 @@ class Moyu32Connection implements SmartCubeConnection {
         for (let i = 0; i < value.byteLength; i++) {
             raw[i] = value.getUint8(i);
         }
-        this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: this.protocol.id, timestamp, bytes: raw });
         const decoded = this.encrypter ? this.encrypter.decrypt(raw) : raw;
         this.diagnostics$?.next({ type: 'DECODED_PACKET', protocol: this.protocol.id, timestamp, opcode: decoded[0], bytes: decoded });
 
