@@ -1,6 +1,6 @@
 
-import { Subject } from 'rxjs';
-import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
+import { ReplaySubject, Subject } from 'rxjs';
+import { SmartCubeConnection, SmartCubeDiagnosticEvent, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
 import { getConnectedGattServer } from '../attachment/gatt-connection';
@@ -41,6 +41,7 @@ class MoyuMhcConnection implements SmartCubeConnection {
     readonly protocol: SmartCubeProtocolInfo = MOYU_MHC_PROTOCOL;
     readonly capabilities: SmartCubeCapabilities;
     events$: Subject<SmartCubeEvent>;
+    diagnostics$?: ReplaySubject<SmartCubeDiagnosticEvent>;
 
     private device: BluetoothDevice;
     private writeChrct: BluetoothRemoteGATTCharacteristic | null = null;
@@ -54,11 +55,12 @@ class MoyuMhcConnection implements SmartCubeConnection {
     private lastBatteryLevel: number | null = null;
     private batteryInterval: ReturnType<typeof setInterval> | null = null;
 
-    constructor(device: BluetoothDevice) {
+    constructor(device: BluetoothDevice, diagnostics = false) {
         this.device = device;
         this.deviceName = device.name || 'MHC';
         this.deviceMAC = '';
         this.events$ = new Subject<SmartCubeEvent>();
+        if (diagnostics) this.diagnostics$ = new ReplaySubject<SmartCubeDiagnosticEvent>(32);
         this.capabilities = {
             gyroscope: false,
             battery: false,
@@ -71,18 +73,31 @@ class MoyuMhcConnection implements SmartCubeConnection {
     private onTurnEvent = (event: Event): void => {
         const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
         if (!value) return;
+        const bytes = Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+        this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: this.protocol.id, timestamp: now(), bytes });
+        if (value.byteLength < 3) {
+            this.diagnostics$?.next({ type: 'MALFORMED_PACKET', protocol: this.protocol.id, timestamp: now(), bytes, reason: 'MoYu MHC turn frame is shorter than 3 bytes' });
+            return;
+        }
         this.parseTurn(value);
     };
 
     private onReadEvent = (event: Event): void => {
         const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
         if (!value || !this.v1) return;
+        this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: this.protocol.id, timestamp: now(), bytes: Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength)) });
         this.v1.onReadNotification(value);
     };
 
     private onGyroEvent = (event: Event): void => {
         const e = (event.target as BluetoothRemoteGATTCharacteristic).value;
-        if (!e || e.byteLength < 20) return;
+        if (!e) return;
+        const bytes = Array.from(new Uint8Array(e.buffer, e.byteOffset, e.byteLength));
+        this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: this.protocol.id, timestamp: now(), bytes });
+        if (e.byteLength < 20) {
+            this.diagnostics$?.next({ type: 'MALFORMED_PACKET', protocol: this.protocol.id, timestamp: now(), bytes, reason: 'MoYu MHC gyro frame is shorter than 20 bytes' });
+            return;
+        }
         const fw = e.getFloat32(4, true);
         const fx = e.getFloat32(8, true);
         const fy = e.getFloat32(12, true);
@@ -382,9 +397,9 @@ const moyuMhcProtocol: SmartCubeProtocol = {
     async connect(
         device: BluetoothDevice,
         _macProvider?: MacAddressProvider,
-        _context?: AttachmentContext
+        context?: AttachmentContext
     ): Promise<SmartCubeConnection> {
-        const conn = new MoyuMhcConnection(device);
+        const conn = new MoyuMhcConnection(device, context?.diagnostics === true);
         await conn.init();
         return conn;
     }

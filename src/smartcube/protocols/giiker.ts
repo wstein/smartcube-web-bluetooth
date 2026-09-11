@@ -1,6 +1,6 @@
 
-import { Subject } from 'rxjs';
-import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
+import { ReplaySubject, Subject } from 'rxjs';
+import { SmartCubeConnection, SmartCubeDiagnosticEvent, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
 import { getConnectedGattServer } from '../attachment/gatt-connection';
@@ -114,6 +114,7 @@ class GiikerConnection implements SmartCubeConnection {
         reset: true
     };
     events$: Subject<SmartCubeEvent>;
+    diagnostics$?: ReplaySubject<SmartCubeDiagnosticEvent>;
 
     private device: BluetoothDevice;
     private gatt: BluetoothRemoteGATTServer | null = null;
@@ -128,16 +129,23 @@ class GiikerConnection implements SmartCubeConnection {
     private lastBatteryLevel: number | null = null;
     private forceNextBatteryEmission = false;
 
-    constructor(device: BluetoothDevice, name: string) {
+    constructor(device: BluetoothDevice, name: string, diagnostics = false) {
         this.device = device;
         this.deviceName = name;
         this.deviceMAC = '';
         this.events$ = new Subject<SmartCubeEvent>();
+        if (diagnostics) this.diagnostics$ = new ReplaySubject<SmartCubeDiagnosticEvent>(32);
     }
 
     private onStateChanged = (event: Event): void => {
         const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
         if (!value) return;
+        const bytes = Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+        this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: this.protocol.id, timestamp: now(), bytes });
+        if (value.byteLength < 20) {
+            this.diagnostics$?.next({ type: 'MALFORMED_PACKET', protocol: this.protocol.id, timestamp: now(), bytes, reason: 'Giiker state frame is shorter than 20 bytes' });
+            return;
+        }
         if (!this.isReady) {
             // Copy the view, because the underlying buffer can be reused by the platform.
             const b = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
@@ -368,7 +376,7 @@ const giikerProtocol: SmartCubeProtocol = {
     async connect(
         device: BluetoothDevice,
         _macProvider?: MacAddressProvider,
-        _context?: AttachmentContext
+        context?: AttachmentContext
     ): Promise<SmartCubeConnection> {
         const devName = device.name || '';
         const name =
@@ -379,7 +387,7 @@ const giikerProtocol: SmartCubeProtocol = {
                             devName.startsWith('Gi') ? 'Giiker i3SE' :
                                 devName.startsWith('Hi-') ? 'Hi-' :
                                     devName || 'Unknown';
-        const conn = new GiikerConnection(device, name);
+        const conn = new GiikerConnection(device, name, context?.diagnostics === true);
         await conn.init();
         return conn;
     }
