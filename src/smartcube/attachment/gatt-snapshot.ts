@@ -15,6 +15,9 @@ async function delay(ms: number): Promise<void> {
 }
 
 async function connectGattWithTimeout(gatt: BluetoothRemoteGATTServer, timeoutMs: number): Promise<void> {
+    if (gatt.connected) {
+        return;
+    }
     const sym = Symbol('gattTimeout');
     try {
         await Promise.race([

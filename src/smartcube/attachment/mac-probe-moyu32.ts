@@ -1,4 +1,5 @@
 import { findCharacteristic } from '../ble-utils';
+import { getConnectedGattServer } from './gatt-connection';
 import { writeGattCharacteristicValue } from '../../gatt-characteristic-write';
 import { createMoyu32SessionCrypto } from './moyu32-session-crypto';
 import { isValidMoYu32DecryptedPacket } from './packet-sanity';
@@ -16,13 +17,10 @@ export async function probeMoyu32Mac(
     options?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<boolean> {
     const timeoutMs = options?.timeoutMs ?? 2000;
-    const gatt = device.gatt;
-    if (!gatt) {
+    if (!device.gatt) {
         return false;
     }
-    if (!gatt.connected) {
-        await gatt.connect();
-    }
+    const gatt = await getConnectedGattServer(device);
     const service = await gatt.getPrimaryService(MOYU32_SVC);
     const chrcts = await service.getCharacteristics();
     const readChrct = findCharacteristic(chrcts, MOYU32_CHR_READ);

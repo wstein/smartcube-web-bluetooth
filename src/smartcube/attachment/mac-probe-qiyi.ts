@@ -1,5 +1,6 @@
 import { ModeOfOperation } from 'aes-js';
 import { findCharacteristic } from '../ble-utils';
+import { getConnectedGattServer } from './gatt-connection';
 import { writeGattCharacteristicValue } from '../../gatt-characteristic-write';
 import { isValidQiYiDecryptedPacket } from './packet-sanity';
 
@@ -70,13 +71,10 @@ export async function probeQiYiMac(
     options?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<boolean> {
     const timeoutMs = options?.timeoutMs ?? 3000;
-    const gatt = device.gatt;
-    if (!gatt) {
+    if (!device.gatt) {
         return false;
     }
-    if (!gatt.connected) {
-        await gatt.connect();
-    }
+    const gatt = await getConnectedGattServer(device);
     const service = await gatt.getPrimaryService(QIYI_SVC);
     const chrcts = await service.getCharacteristics();
     const chrct = findCharacteristic(chrcts, QIYI_CHR);

@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
+import { getConnectedGattServer } from '../attachment/gatt-connection';
 import { SmartCubeProtocol, registerProtocol } from '../protocol';
 import { CubieCube } from '../cubie-cube';
 import { now, findCharacteristic } from '../ble-utils';
@@ -218,7 +219,7 @@ class GiikerConnection implements SmartCubeConnection {
     async init(): Promise<void> {
         this.device.addEventListener('gattserverdisconnected', this.onDisconnect);
 
-        this.gatt = await this.device.gatt!.connect();
+        this.gatt = await getConnectedGattServer(this.device);
         const dataService = await this.gatt.getPrimaryService(SERVICE_UUID_DATA);
         this.dataChrct = await dataService.getCharacteristic(CHRCT_UUID_DATA);
 

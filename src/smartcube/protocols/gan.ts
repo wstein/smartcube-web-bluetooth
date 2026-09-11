@@ -2,6 +2,7 @@ import { Subject } from 'rxjs';
 import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
+import { getConnectedGattServer } from '../attachment/gatt-connection';
 import { getCachedMacForDevice, macFromGanManufacturerData, waitForManufacturerData } from '../attachment/address-hints';
 import { SmartCubeProtocol, registerProtocol } from '../protocol';
 import * as def from '../../gan-cube-definitions';
@@ -179,10 +180,7 @@ async function connectGanDevice(
     context?: AttachmentContext
 ): Promise<SmartCubeConnection> {
     const bleDevice = device as BluetoothDeviceWithMAC;
-    const gatt = device.gatt!;
-    if (!gatt.connected) {
-        await gatt.connect();
-    }
+    const gatt = await getConnectedGattServer(device);
     const services = await gatt.getPrimaryServices();
     const serviceUuidSet = new Set(services.map((s) => normalizeUuid(s.uuid)));
 

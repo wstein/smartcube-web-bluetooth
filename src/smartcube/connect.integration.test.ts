@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { connectSmartCube, type SmartCubeEvent } from './index';
 import { FIXTURES, loadFixture } from '../test/fixtures';
 import { installMockBluetoothFromFixture } from '../test/bluetooth-mock';
@@ -63,6 +63,7 @@ describe('connectSmartCube (capture replay)', () => {
         maxAutoFlushNotifies: 5,
       });
       device.watchAdvertisements = async () => await new Promise<void>(() => {});
+      const connect = vi.spyOn(device.gatt as unknown as { connect: () => Promise<unknown> }, 'connect');
 
       const conn = await withTimeout(
         connectSmartCube({ enableAddressSearch: false }),
@@ -71,6 +72,7 @@ describe('connectSmartCube (capture replay)', () => {
       );
 
       expect(conn.protocol.id).toBe('gocube');
+      expect(connect).toHaveBeenCalledTimes(1);
       await conn.disconnect();
     },
     5_000

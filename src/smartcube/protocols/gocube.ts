@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { GoCubeOfflineStats, GoCubeType, GoCubeVendorCommand, SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
+import { getConnectedGattServer } from '../attachment/gatt-connection';
 import { SmartCubeProtocol, registerProtocol } from '../protocol';
 import { CubieCube, SOLVED_FACELET } from '../cubie-cube';
 import { now } from '../ble-utils';
@@ -372,7 +373,9 @@ class GoCubeConnection implements SmartCubeConnection {
 
     async init(): Promise<void> {
         this.device.addEventListener('gattserverdisconnected', this.onDisconnect);
-        const gatt = await this.device.gatt!.connect();
+        // `connectSmartCube` has already opened GATT to inspect the service
+        // profile. Reconnecting here can stall on real adapters; reuse it.
+        const gatt = await getConnectedGattServer(this.device);
         const service = await gatt.getPrimaryService(SERVICE_UUID);
         this.writeChrct = await service.getCharacteristic(CHRCT_UUID_WRITE);
         this.readChrct = await service.getCharacteristic(CHRCT_UUID_READ);

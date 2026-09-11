@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
+import { getConnectedGattServer } from '../attachment/gatt-connection';
 import { SmartCubeProtocol, registerProtocol } from '../protocol';
 import { CubieCube, SOLVED_FACELET } from '../cubie-cube';
 import { now, findCharacteristic } from '../ble-utils';
@@ -230,7 +231,7 @@ class MoyuMhcConnection implements SmartCubeConnection {
 
     async init(): Promise<void> {
         this.device.addEventListener('gattserverdisconnected', this.onDisconnect);
-        const gatt = await this.device.gatt!.connect();
+        const gatt = await getConnectedGattServer(this.device);
         const service = await gatt.getPrimaryService(SERVICE_UUID);
         const chrcts = await service.getCharacteristics();
 

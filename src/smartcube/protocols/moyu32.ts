@@ -4,6 +4,7 @@ import { ModeOfOperation } from 'aes-js';
 import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
+import { getConnectedGattServer } from '../attachment/gatt-connection';
 import { getCachedMacForDevice } from '../attachment/address-hints';
 import { buildMoyu32MacCandidatesFromName } from '../attachment/mac-candidates';
 import { probeMoyu32Mac } from '../attachment/mac-probe-moyu32';
@@ -364,7 +365,7 @@ class Moyu32Connection implements SmartCubeConnection {
 
     async init(): Promise<void> {
         this.device.addEventListener('gattserverdisconnected', this.onDisconnect);
-        const gatt = await this.device.gatt!.connect();
+        const gatt = await getConnectedGattServer(this.device);
         const service = await gatt.getPrimaryService(SERVICE_UUID);
         const chrcts = await service.getCharacteristics();
         this.readChrct = findCharacteristic(chrcts, CHRT_UUID_READ);
