@@ -1,6 +1,6 @@
 
-import { Subject } from 'rxjs';
-import { GoCubeOfflineStats, GoCubeType, GoCubeVendorCommand, SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
+import { ReplaySubject, Subject } from 'rxjs';
+import { GoCubeOfflineStats, GoCubeType, GoCubeVendorCommand, SmartCubeConnection, SmartCubeDiagnosticEvent, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
 import { getConnectedGattServer } from '../attachment/gatt-connection';
@@ -122,6 +122,7 @@ class GoCubeConnection implements SmartCubeConnection {
     readonly protocol: SmartCubeProtocolInfo = GOCUBE_PROTOCOL;
     readonly capabilities: SmartCubeCapabilities;
     events$: Subject<SmartCubeEvent>;
+    diagnostics$?: ReplaySubject<SmartCubeDiagnosticEvent>;
 
     private device: BluetoothDevice;
     private readChrct: BluetoothRemoteGATTCharacteristic | null = null;
@@ -138,7 +139,7 @@ class GoCubeConnection implements SmartCubeConnection {
     private awaitingInitialState = false;
     private resolveInitialState: (() => void) | undefined;
 
-    constructor(device: BluetoothDevice, name: string, gyroSupported: boolean, supportsVendorCommands: boolean) {
+    constructor(device: BluetoothDevice, name: string, gyroSupported: boolean, supportsVendorCommands: boolean, diagnostics = false) {
         this.device = device;
         this.deviceName = name;
         this.deviceMAC = '';
@@ -172,11 +173,23 @@ class GoCubeConnection implements SmartCubeConnection {
             ...(vendorCommands ? { vendorCommands } : {}),
         };
         this.events$ = new Subject<SmartCubeEvent>();
+        if (diagnostics) this.diagnostics$ = new ReplaySubject<SmartCubeDiagnosticEvent>(32);
+    }
+
+    private diagnostic(type: SmartCubeDiagnosticEvent['type'], value: DataView, reason?: string): void {
+        this.diagnostics$?.next({
+            type,
+            protocol: this.protocol.id,
+            timestamp: now(),
+            bytes: Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength)),
+            reason,
+        });
     }
 
     private onStateChanged = (event: Event): void => {
         const value = (event.target as BluetoothRemoteGATTCharacteristic).value;
         if (!value) return;
+        this.diagnostic('RAW_PACKET', value);
         this.parseData(value);
     };
 
@@ -257,10 +270,12 @@ class GoCubeConnection implements SmartCubeConnection {
         if (value.getUint8(0) !== 0x2a ||
             value.getUint8(value.byteLength - 2) !== 0x0d ||
             value.getUint8(value.byteLength - 1) !== 0x0a) {
+            this.diagnostic('MALFORMED_PACKET', value, 'Invalid GoCube frame delimiters');
             return;
         }
         // Full frames include a checksum byte before CRLF; short type-1 move frames may be smaller.
         if (value.byteLength >= 7 && !gocubeChecksumValid(value)) {
+            this.diagnostic('MALFORMED_PACKET', value, 'Invalid GoCube frame checksum');
             return;
         }
 
@@ -498,11 +513,11 @@ const goCubeProtocol: SmartCubeProtocol = {
     async connect(
         device: BluetoothDevice,
         _macProvider?: MacAddressProvider,
-        _context?: AttachmentContext
+        context?: AttachmentContext
     ): Promise<SmartCubeConnection> {
         const raw = device.name ?? '';
         const name = raw.startsWith('GoCube') ? 'GoCube' : 'Rubiks Connected';
-        const conn = new GoCubeConnection(device, name, goCubeDeviceSupportsGyro(raw), raw.startsWith('GoCube'));
+        const conn = new GoCubeConnection(device, name, goCubeDeviceSupportsGyro(raw), raw.startsWith('GoCube'), context?.diagnostics === true);
         await conn.init();
         return conn;
     }

@@ -96,11 +96,12 @@ type SmartCubeDisconnectEvent = {
  * never treat them as moves or snapshots.
  */
 type SmartCubeDiagnosticEvent = {
-    type: 'UNKNOWN_PACKET';
+    type: 'RAW_PACKET' | 'DECODED_PACKET' | 'MALFORMED_PACKET' | 'UNKNOWN_PACKET';
     protocol: string;
     timestamp: number;
     opcode?: number;
     bytes: readonly number[];
+    reason?: string;
 };
 
 type SmartCubeEventMessage =

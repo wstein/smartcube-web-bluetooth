@@ -62,9 +62,12 @@ describe('gocubeProtocol.connect (capture replay)', () => {
       enableAddressSearch: false,
       onStatus: undefined,
       signal: undefined,
+      diagnostics: true,
     });
 
     const { events, unsubscribe } = collectEvents(conn);
+    const diagnostics: unknown[] = [];
+    const diagnosticsSubscription = conn.diagnostics$?.subscribe((event) => diagnostics.push(event));
 
     await replayer.drainNotificationsAsync();
     unsubscribe();
@@ -84,6 +87,8 @@ describe('gocubeProtocol.connect (capture replay)', () => {
     expect(conn.capabilities.gyroscope).toBe(true);
     expect(conn.capabilities.vendorCommands).toContain('REBOOT');
     expect(conn.sendVendorCommand).toBeTypeOf('function');
+    expect(diagnostics.some((event) => (event as { type: string }).type === 'RAW_PACKET')).toBe(true);
+    diagnosticsSubscription?.unsubscribe();
 
     const disconnectEvents: SmartCubeEvent[] = [];
     const sub2 = conn.events$.subscribe({ next: (e) => disconnectEvents.push(e) });
