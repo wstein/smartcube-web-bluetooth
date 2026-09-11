@@ -277,7 +277,6 @@ class GanCubeClassicConnection implements GanCubeConnection, GanCubeRawConnectio
             var eventMessage = characteristic.value;
             if (!eventMessage || eventMessage.byteLength < 16) return;
             var raw = new Uint8Array(eventMessage.buffer, eventMessage.byteOffset, eventMessage.byteLength);
-            this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: 'gan', timestamp: now(), bytes: [...raw] });
             var decryptedMessage = this.encrypter.decrypt(raw);
             this.diagnostics$?.next({ type: 'DECODED_PACKET', protocol: 'gan', timestamp: now(), bytes: [...decryptedMessage] });
             if (this.validateDecrypted && !this.validateDecrypted(decryptedMessage)) {
