@@ -1,7 +1,7 @@
 
-import { Subject } from 'rxjs';
+import { ReplaySubject, Subject } from 'rxjs';
 import { ModeOfOperation } from 'aes-js';
-import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
+import { SmartCubeConnection, SmartCubeDiagnosticEvent, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
 import { getConnectedGattServer } from '../attachment/gatt-connection';
@@ -148,6 +148,7 @@ class Moyu32Connection implements SmartCubeConnection {
         reset: false
     };
     events$: Subject<SmartCubeEvent>;
+    diagnostics$?: ReplaySubject<SmartCubeDiagnosticEvent>;
 
     private device: BluetoothDevice;
     private readChrct: BluetoothRemoteGATTCharacteristic | null = null;
@@ -164,11 +165,12 @@ class Moyu32Connection implements SmartCubeConnection {
     private forceNextBatteryEmission = false;
     private batteryInterval: ReturnType<typeof setInterval> | null = null;
 
-    constructor(device: BluetoothDevice, mac: string) {
+    constructor(device: BluetoothDevice, mac: string, diagnostics = false) {
         this.device = device;
         this.deviceName = device.name || 'WCU_MY3';
         this.deviceMAC = mac;
         this.events$ = new Subject<SmartCubeEvent>();
+        if (diagnostics) this.diagnostics$ = new ReplaySubject<SmartCubeDiagnosticEvent>(32);
     }
 
     private sendRequest(req: number[]): Promise<void> {
@@ -217,7 +219,9 @@ class Moyu32Connection implements SmartCubeConnection {
         for (let i = 0; i < value.byteLength; i++) {
             raw[i] = value.getUint8(i);
         }
+        this.diagnostics$?.next({ type: 'RAW_PACKET', protocol: this.protocol.id, timestamp, bytes: raw });
         const decoded = this.encrypter ? this.encrypter.decrypt(raw) : raw;
+        this.diagnostics$?.next({ type: 'DECODED_PACKET', protocol: this.protocol.id, timestamp, opcode: decoded[0], bytes: decoded });
 
         if ((decoded[0] | 0) === 171) {
             if (!this.capabilities.gyroscope) {
@@ -226,7 +230,6 @@ class Moyu32Connection implements SmartCubeConnection {
             this.parseGyroData(decoded, timestamp);
             return;
         }
-
         const bits = decoded.map(b => ((b + 256) & 0xFF).toString(2).padStart(8, '0')).join('');
         const msgType = parseInt(bits.slice(0, 8), 2);
 
@@ -325,6 +328,8 @@ class Moyu32Connection implements SmartCubeConnection {
                 }
                 this.deviceTimeOffset = timestamp - this.deviceTime;
             }
+        } else {
+            this.diagnostics$?.next({ type: 'UNKNOWN_PACKET', protocol: this.protocol.id, timestamp, opcode: msgType, bytes: decoded });
         }
     }
 
@@ -492,7 +497,7 @@ async function connectMoyu32Device(
         throw new Error('Unable to determine MoYu32 cube MAC address');
     }
 
-    const conn = new Moyu32Connection(device, mac);
+    const conn = new Moyu32Connection(device, mac, context?.diagnostics === true);
     await conn.init();
     return conn;
 }
