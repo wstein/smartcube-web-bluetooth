@@ -69,10 +69,13 @@ describe('ganProtocol.connect (capture replay)', () => {
         enableAddressSearch: false,
         onStatus: undefined,
         signal: undefined,
+        diagnostics: true,
       }
     );
 
     const { events, unsubscribe } = collectEvents(conn);
+    const diagnostics: unknown[] = [];
+    const diagnosticsSubscription = conn.diagnostics$?.subscribe((event) => diagnostics.push(event));
 
     await replayer.drainNotificationsAsync();
     unsubscribe();
@@ -82,6 +85,9 @@ describe('ganProtocol.connect (capture replay)', () => {
     expect(moves(events).slice(0, expectedMoves.length)).toEqual(expectedMoves);
     expect(lastFacelets(events)).toBe(expectedLast);
     expect(conn.capabilities.gyroscope).toBe(false);
+    expect(diagnostics.some((event) => (event as { type: string }).type === 'RAW_PACKET')).toBe(true);
+    expect(diagnostics.some((event) => (event as { type: string }).type === 'DECODED_PACKET')).toBe(true);
+    diagnosticsSubscription?.unsubscribe();
 
     const moveEvent = events.find((event) => event.type === 'MOVE');
     expect(moveEvent).toMatchObject({

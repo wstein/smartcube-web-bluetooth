@@ -109,6 +109,7 @@ class GanSmartCubeConnection implements SmartCubeConnection {
     private lastBatteryLevel: number | null = null;
     private forceNextBatteryEmission = false;
     events$: Subject<SmartCubeEvent>;
+    diagnostics$?: import('rxjs').Observable<import('../types').SmartCubeDiagnosticEvent>;
 
     readonly protocol: SmartCubeProtocolInfo;
     readonly capabilities: SmartCubeCapabilities;
@@ -123,6 +124,7 @@ class GanSmartCubeConnection implements SmartCubeConnection {
         }
         this.capabilities = base;
         this.events$ = new Subject<SmartCubeEvent>();
+        this.diagnostics$ = ganConn.diagnostics$;
         ganConn.events$.subscribe({
             next: (event) => {
                 if (
@@ -244,7 +246,7 @@ async function connectGanDevice(
             stateCharacteristic,
             encrypter,
             driver,
-            { validateDecrypted: isValidGanGen2Packet },
+            { validateDecrypted: isValidGanGen2Packet, diagnostics: context?.diagnostics === true },
         );
     } else if (pick === 'g3') {
         const service = await gatt.getPrimaryService(def.GAN_GEN3_SERVICE);
@@ -259,7 +261,7 @@ async function connectGanDevice(
             stateCharacteristic,
             encrypter,
             driver,
-            { validateDecrypted: isValidGanGen3Packet },
+            { validateDecrypted: isValidGanGen3Packet, diagnostics: context?.diagnostics === true },
         );
     } else if (pick === 'g4') {
         const service = await gatt.getPrimaryService(def.GAN_GEN4_SERVICE);
@@ -274,7 +276,7 @@ async function connectGanDevice(
             stateCharacteristic,
             encrypter,
             driver,
-            { validateDecrypted: isValidGanGen4Packet },
+            { validateDecrypted: isValidGanGen4Packet, diagnostics: context?.diagnostics === true },
         );
     }
 
