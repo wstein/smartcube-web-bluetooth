@@ -61,11 +61,11 @@ describe('qiyiProtocol.connect (capture replay)', () => {
       signal: undefined,
       diagnostics: true,
     });
-    const diagnostics: unknown[] = [];
-    const unsubscribe = conn.diagnostics$?.subscribe((event) => diagnostics.push(event));
     const { events, unsubscribe: unsubscribeEvents } = collectEvents(conn);
 
     await replayer.drainNotificationsAsync();
+    const diagnostics: unknown[] = [];
+    const unsubscribe = conn.diagnostics$?.subscribe((event) => diagnostics.push(event));
     unsubscribe?.unsubscribe();
     unsubscribeEvents();
 

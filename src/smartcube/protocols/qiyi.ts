@@ -1,4 +1,4 @@
-import { Subject } from 'rxjs';
+import { ReplaySubject, Subject } from 'rxjs';
 import { ModeOfOperation } from 'aes-js';
 import { SmartCubeConnection, SmartCubeDiagnosticEvent, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
@@ -120,7 +120,7 @@ class QiYiConnection implements SmartCubeConnection {
         reset: false
     };
     events$: Subject<SmartCubeEvent>;
-    diagnostics$?: Subject<SmartCubeDiagnosticEvent>;
+    diagnostics$?: ReplaySubject<SmartCubeDiagnosticEvent>;
 
     private device: BluetoothDevice;
     private cubeChrct: BluetoothRemoteGATTCharacteristic | null = null;
@@ -137,7 +137,10 @@ class QiYiConnection implements SmartCubeConnection {
         this.deviceName = device.name || 'QiYi';
         this.deviceMAC = mac;
         this.events$ = new Subject<SmartCubeEvent>();
-        if (diagnostics) this.diagnostics$ = new Subject<SmartCubeDiagnosticEvent>();
+        // Diagnostics can arrive while init() is still establishing
+        // notifications, before connectSmartCube() returns its connection.
+        // Keep a small bounded replay window for the eventual subscriber.
+        if (diagnostics) this.diagnostics$ = new ReplaySubject<SmartCubeDiagnosticEvent>(32);
         this.encrypter = new QiYiEncrypter();
     }
 
