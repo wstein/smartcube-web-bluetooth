@@ -90,6 +90,19 @@ type SmartCubeDisconnectEvent = {
     type: "DISCONNECT";
 };
 
+/**
+ * Opt-in protocol diagnostic. These packets are intentionally separate from
+ * `events$`: a decoder could not map them to cube state, so applications must
+ * never treat them as moves or snapshots.
+ */
+type SmartCubeDiagnosticEvent = {
+    type: 'UNKNOWN_PACKET';
+    protocol: string;
+    timestamp: number;
+    opcode?: number;
+    bytes: readonly number[];
+};
+
 type SmartCubeEventMessage =
     | SmartCubeMoveEvent
     | SmartCubeFaceletsEvent
@@ -122,6 +135,8 @@ interface SmartCubeConnection {
     readonly protocol: SmartCubeProtocolInfo;
     readonly capabilities: SmartCubeCapabilities;
     events$: Observable<SmartCubeEvent>;
+    /** Present only when diagnostics were requested at connection time. */
+    diagnostics$?: Observable<SmartCubeDiagnosticEvent>;
     sendCommand(command: SmartCubeCommand): Promise<void>;
     /** Send an optional protocol-specific command after checking `capabilities.vendorCommands`. */
     sendVendorCommand?(command: SmartCubeVendorCommand): Promise<void>;
@@ -145,6 +160,7 @@ export type {
     SmartCubeProtocolInfo,
     SmartCubeHardwareEvent,
     SmartCubeDisconnectEvent,
+    SmartCubeDiagnosticEvent,
     SmartCubeCommand,
     SmartCubeCapabilities,
     SmartCubeConnection,

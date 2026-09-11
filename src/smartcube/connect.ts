@@ -212,6 +212,7 @@ export async function connectSmartCube(
         enableAddressSearch: opts.enableAddressSearch === true,
         onStatus: opts.onStatus,
         signal: opts.signal,
+        diagnostics: opts.diagnostics === true,
     };
 
     let conn: SmartCubeConnection;

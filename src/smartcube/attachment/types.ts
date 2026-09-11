@@ -9,6 +9,8 @@ export interface AttachmentContext {
     enableAddressSearch?: boolean;
     onStatus?: (message: string) => void;
     signal?: AbortSignal;
+    /** Expose decoder-rejected packets through the connection diagnostic stream. */
+    diagnostics?: boolean;
 }
 
 export type DeviceSelectionMode = 'filtered' | 'any';
@@ -31,4 +33,6 @@ export interface ConnectSmartCubeOptions {
      * derived from the device name (slow; default false).
      */
     enableAddressSearch?: boolean;
+    /** Enable the optional `connection.diagnostics$` stream for protocol investigation. */
+    diagnostics?: boolean;
 }

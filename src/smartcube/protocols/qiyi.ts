@@ -1,6 +1,6 @@
 import { Subject } from 'rxjs';
 import { ModeOfOperation } from 'aes-js';
-import { SmartCubeConnection, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
+import { SmartCubeConnection, SmartCubeDiagnosticEvent, SmartCubeEvent, SmartCubeCommand, SmartCubeCapabilities, SmartCubeProtocolInfo, MacAddressProvider } from '../types';
 import type { AttachmentContext } from '../attachment/types';
 import { normalizeUuid } from '../attachment/normalize-uuid';
 import { getConnectedGattServer } from '../attachment/gatt-connection';
@@ -120,6 +120,7 @@ class QiYiConnection implements SmartCubeConnection {
         reset: false
     };
     events$: Subject<SmartCubeEvent>;
+    diagnostics$?: Subject<SmartCubeDiagnosticEvent>;
 
     private device: BluetoothDevice;
     private cubeChrct: BluetoothRemoteGATTCharacteristic | null = null;
@@ -131,11 +132,12 @@ class QiYiConnection implements SmartCubeConnection {
     private forceNextBatteryEmission = false;
     private writeChain: Promise<void> = Promise.resolve();
 
-    constructor(device: BluetoothDevice, mac: string) {
+    constructor(device: BluetoothDevice, mac: string, diagnostics = false) {
         this.device = device;
         this.deviceName = device.name || 'QiYi';
         this.deviceMAC = mac;
         this.events$ = new Subject<SmartCubeEvent>();
+        if (diagnostics) this.diagnostics$ = new Subject<SmartCubeDiagnosticEvent>();
         this.encrypter = new QiYiEncrypter();
     }
 
@@ -339,6 +341,13 @@ class QiYiConnection implements SmartCubeConnection {
         }
 
         // Unknown opcode: do not advance lastTs (avoids skewing move history filters).
+        this.diagnostics$?.next({
+            type: 'UNKNOWN_PACKET',
+            protocol: this.protocol.id,
+            timestamp,
+            opcode,
+            bytes: [...msg],
+        });
     }
 
     private onDisconnect = (): void => {
@@ -461,7 +470,7 @@ async function connectQiYiDevice(
         throw new Error('Unable to determine QiYi cube MAC address');
     }
 
-    const conn = new QiYiConnection(device, mac);
+    const conn = new QiYiConnection(device, mac, context?.diagnostics === true);
     await conn.init();
     return conn;
 }

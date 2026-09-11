@@ -23,6 +23,7 @@ export type {
     SmartCubeProtocolInfo,
     SmartCubeHardwareEvent,
     SmartCubeDisconnectEvent,
+    SmartCubeDiagnosticEvent,
     SmartCubeCommand,
     SmartCubeCapabilities,
     SmartCubeConnection
